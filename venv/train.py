@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.layers import Input, Dense, Conv2D, MaxPooling2D, Flatten
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
@@ -22,10 +22,10 @@ def get_advantages(values, masks, rewards):
     for i in reversed(range(len(rewards))):
         delta = rewards[i] + gamma * values[i + 1] * masks[i] - values[i]
         gae = delta + gamma * lmbda * masks[i] * gae
-        returns.insert(0, gae + values[i])
+        returns.insert(0, gae + values[i]) # insert at position zero
 
     adv = np.array(returns) - values[:-1]
-    return returns, (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
+    return returns, (adv - np.mean(adv)) / (np.std(adv) + 1e-10) # advantages is normalised and a residue is added to prevent division by zero
 
 
 def ppo_loss_print(oldpolicy_probs, advantages, rewards, values):
@@ -185,7 +185,7 @@ image_based = False
 if image_based:
     env = football_env.create_environment(env_name='academy_empty_goal', representation='pixels', render=True)
 else:
-    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115')
+    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115', render=True)
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -200,17 +200,19 @@ if image_based:
     model_actor = get_model_actor_image(input_dims=state_dims, output_dims=n_actions)
     model_critic = get_model_critic_image(input_dims=state_dims)
 else:
-    model_actor = get_model_actor_simple(input_dims=state_dims, output_dims=n_actions)
-    model_critic = get_model_critic_simple(input_dims=state_dims)
+    #model_actor = get_model_actor_simple(input_dims=state_dims, output_dims=n_actions)
+    #model_critic = get_model_critic_simple(input_dims=state_dims)
+    model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
+    model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 100000
+ppo_steps = 128
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 2
+max_iters = 10
 
 while not target_reached and iters < max_iters:
-
+    iter_rewards = 0
     states = []
     actions = []
     values = []
@@ -229,7 +231,8 @@ while not target_reached and iters < max_iters:
         action_onehot[action] = 1
 
         observation, reward, done, info = env.step(action)
-        print('itr: ' + str(itr) + ', action=' + str(action) + ', reward=' + str(reward) + ', q val=' + str(q_value))
+        iter_rewards = iter_rewards + reward
+        print('itr: ' + str(itr) + ', action=' + str(action) + ', reward=' + str(reward) + ', q val=' + str(q_value) + ', total rewards=' + str(iter_rewards))
         mask = not done
 
         states.append(state)
@@ -268,17 +271,14 @@ while not target_reached and iters < max_iters:
     # critic_loss = model_critic.fit([states], [np.reshape(returns, newshape=(-1, 1))], shuffle=True, epochs=8,
     #                                verbose=True, callbacks=[tensor_board])
     #avg_reward = np.mean([test_reward() for _ in range(5)])
-    avg_reward = sum(rewards)
-    print('total test reward=' + str(avg_reward))
-    if avg_reward > best_reward:
-        print('best reward=' + str(avg_reward))
-        model_actor.save('model_actor_{}_{}.hdf5'.format(iters, avg_reward))
-        model_critic.save('model_critic_{}_{}.hdf5'.format(iters, avg_reward))
-        # model_actor.save('model_actor_3_1.0.hdf5')
-        # model_critic.save('model_critic_3_1.0.hdf5')
-        best_reward = avg_reward
-    if best_reward > 10 or iters > max_iters:
-        target_reached = True
+    print('total test reward=' + str(iter_rewards))
+    if iter_rewards > 0:
+        print('best reward=' + str(iter_rewards))
+        model_actor.save('model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_critic.save('model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
+       #best_reward = avg_reward
+    #if best_reward > 10 or iters > max_iters:
+     #   target_reached = True
     iters += 1
     env.reset()
 
