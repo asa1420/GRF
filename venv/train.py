@@ -185,7 +185,7 @@ image_based = False
 if image_based:
     env = football_env.create_environment(env_name='academy_empty_goal', representation='pixels', render=True)
 else:
-    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115', render=True)
+    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115')
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -200,16 +200,16 @@ if image_based:
     model_actor = get_model_actor_image(input_dims=state_dims, output_dims=n_actions)
     model_critic = get_model_critic_image(input_dims=state_dims)
 else:
-    #model_actor = get_model_actor_simple(input_dims=state_dims, output_dims=n_actions)
-    #model_critic = get_model_critic_simple(input_dims=state_dims)
-    model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
-    model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
+    model_actor = get_model_actor_simple(input_dims=state_dims, output_dims=n_actions)
+    model_critic = get_model_critic_simple(input_dims=state_dims)
+    # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
+    # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
 ppo_steps = 128
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 10
+max_iters = 150
 
 while not target_reached and iters < max_iters:
     iter_rewards = 0
