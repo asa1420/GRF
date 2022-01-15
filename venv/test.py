@@ -6,13 +6,13 @@ import tensorflow as tf
 import os.path
 from tensorflow.keras.models import Model, load_model
 
-env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115', render=True)
+env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115')
 
 n_actions = env.action_space.n
 dummy_n = np.zeros((1, 1, n_actions))
 dummy_1 = np.zeros((1, 1, 1))
 
-f = open('/home/abdullah/PycharmProjects/GRF/venv/test data/empty goal scenario', 'w')
+f = open('/home/abdullah/PycharmProjects/GRF/venv/test data/empty goal scenario 2', 'w')
 
 models_list = ['48_1.0','53_1.0','61_2.0','64_1.0','67_1.0','71_1.0','72_1.0',
                '76_1.0','80_1.0','82_1.0','84_1.0','86_1.0','87_1.0','89_1.0',
@@ -26,7 +26,7 @@ for model in models_list:
     done = False
     total_rewards = 0
     restart_counter = 0
-    while restart_counter < 10:
+    while restart_counter < 5:
         state_input = K.expand_dims(state, 0)
         action_probs = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1)
         #action = np.argmax(action_probs)
@@ -38,6 +38,5 @@ for model in models_list:
         if done:
             state = env.reset()
             restart_counter += 1
-    string_to_write = [model, ":", str(total_rewards),'\n', str(action_probs),'\n']
-    f.write(model + ": " + str(total_rewards) + '\n' + str(action_probs) + '\n')
+    f.write(model + ": " + str(total_rewards) + '\n')
 f.close()
