@@ -183,9 +183,9 @@ def one_hot_encoding(probs):
 image_based = False
 
 if image_based:
-    env = football_env.create_environment(env_name='5_vs_5', representation='pixels', render=True)
+    env = football_env.create_environment(env_name='academy_empty_goal', representation='pixels', render=True)
 else:
-    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115', render=True, rewards='scoring, checkpoints')
+    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115')
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -274,8 +274,8 @@ while not target_reached and iters < max_iters:
     print('total test reward=' + str(iter_rewards))
     if iter_rewards > 0:
         print('best reward=' + str(iter_rewards))
-        #model_actor.save('model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
-        #model_critic.save('model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_actor.save('model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_critic.save('model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
        #best_reward = avg_reward
     #if best_reward > 10 or iters > max_iters:
      #   target_reached = True
