@@ -17,14 +17,18 @@ lmbda = 0.95
 
 
 def get_advantages(values, masks, rewards):
-    returns = []
-    gae = 0
+    returns = np.zeros((ppo_steps, 2)) # for two players
+    gae1 = 0
+    gae2 = 0
     for i in reversed(range(len(rewards))):
-        delta = rewards[i] + gamma * values[i + 1] * masks[i] - values[i]
-        gae = delta + gamma * lmbda * masks[i] * gae
-        returns.insert(0, gae + values[i]) # insert at position zero
+        delta1 = rewards[i][0] + gamma * values[i + 1][0] * masks[i] - values[i][0]
+        gae1 = delta1 + gamma * lmbda * masks[i] * gae1
+        delta2 = rewards[i][1] + gamma * values[i + 1][1] * masks[i] - values[i][1]
+        gae2 = delta2 + gamma * lmbda * masks[i] * gae2
+        returns[i][0] = gae1 + values[i][0]
+        returns[i][1] = gae2 + values[i][1]
 
-    adv = np.array(returns) - values[:-1]
+    adv = returns - values[:-1]
     return returns, (adv - np.mean(adv)) / (np.std(adv) + 1e-10) # advantages is normalised and a residue is added to prevent division by zero
 
 
@@ -102,16 +106,16 @@ def get_model_actor_image(input_dims, output_dims):
 
 def get_model_actor_simple(input_dims, output_dims):
     state_input = Input(shape=input_dims)
-    oldpolicy_probs = Input(shape=(1, output_dims,))
-    advantages = Input(shape=(1, 1,))
-    rewards = Input(shape=(1, 1,))
-    values = Input(shape=(1, 1,))
+    oldpolicy_probs = Input(shape=(2, output_dims[0],)) # changed to make it suitable for two players
+    advantages = Input(shape=(2, 1,))
+    rewards = Input(shape=(2, 1,))
+    values = Input(shape=(2, 1,))
 
     # Classification block
-    x = Dense(512, activation='relu', name='fc1')(state_input)
-    x = Dense(256, activation='relu', name='fc2')(x)
-    out_actions = Dense(n_actions, activation='softmax', name='predictions')(x)
-
+    x = Dense(512, activation='relu', name='fc1')(state_input) # second layer?
+    x = Dense(256, activation='relu', name='fc2')(x) # Third layer?
+    out_actions = Dense(action_dims[0], activation='softmax', name='predictions')(x) # how do I make the output an array of 2 action spaces?
+    # it automatically became a 2-d array (2,19) i don't know how. maybe because the input state and oldpolicy_probs are now 2 instead of 1?
     model = Model(inputs=[state_input, oldpolicy_probs, advantages, rewards, values],
                   outputs=[out_actions])
     model.compile(optimizer=Adam(lr=1e-4), loss=[ppo_loss(
@@ -152,7 +156,7 @@ def get_model_critic_simple(input_dims):
 
     model = Model(inputs=[state_input], outputs=[out_actions])
     model.compile(optimizer=Adam(lr=1e-4), loss='mse')
-    # model.summary()
+    model.summary()
     return model
 
 
@@ -185,36 +189,37 @@ image_based = False
 if image_based:
     env = football_env.create_environment(env_name='5_vs_5', representation='pixels', render=True)
 else:
-    env = football_env.create_environment(env_name='5_vs_5', representation='simple115', render=True, rewards='scoring,checkpoints')
+    env = football_env.create_environment(env_name='5_vs_5', representation='simple115v2', render=True, rewards='scoring,checkpoints', number_of_left_players_agent_controls=2)
 
 state = env.reset()
 state_dims = env.observation_space.shape
-n_actions = env.action_space.n
+action_dims = env.action_space.nvec # the number of actions now is an array of the number of actions for each player. For two players, it is [19 19]
 
-dummy_n = np.zeros((1, 1, n_actions))
-dummy_1 = np.zeros((1, 1, 1))
-
+dummy_n = np.zeros((1, len(action_dims), action_dims[0])) # len(action_dims) = number of players being controlled
+dummy_1 = np.zeros((1, len(action_dims), 1)) # the extra 1 just adds an extra [] to the array, idk why it is needed (definitely for the neural network though)
+# I think it is the dimension for the batch size!
 tensor_board = TensorBoard(log_dir='./logs')
 
 if image_based:
-    model_actor = get_model_actor_image(input_dims=state_dims, output_dims=n_actions)
+    model_actor = get_model_actor_image(input_dims=state_dims, output_dims=action_dims)
     model_critic = get_model_critic_image(input_dims=state_dims)
 else:
-    model_actor = get_model_actor_simple(input_dims=state_dims, output_dims=n_actions)
+    model_actor = get_model_actor_simple(input_dims=state_dims, output_dims=action_dims)
     model_critic = get_model_critic_simple(input_dims=state_dims)
     # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
     # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 128
+ppo_steps = 300
 target_reached = False
 best_reward = 0
 iters = 0
 max_iters = 150
 
 while not target_reached and iters < max_iters:
-    iter_rewards = 0
+    iter_rewards = np.zeros(2)
     states = []
-    actions = []
+    actions_player1 = []
+    actions_player2 = []
     values = []
     masks = []
     rewards = []
@@ -224,21 +229,24 @@ while not target_reached and iters < max_iters:
 
     for itr in range(ppo_steps):
         state_input = K.expand_dims(state, 0)
-        action_dist = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1)
-        q_value = model_critic.predict([state_input], steps=1)
-        action = np.random.choice(n_actions, p=action_dist[0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
-        action_onehot = np.zeros(n_actions)
-        action_onehot[action] = 1
-
-        observation, reward, done, info = env.step(action)
-        iter_rewards = iter_rewards + reward
-        print('itr: ' + str(itr) + ', action=' + str(action) + ', reward=' + str(reward) + ', q val=' + str(q_value) + ', total rewards=' + str(iter_rewards))
+        action_dist = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1) # why do we pass dummy here? instead of the actual arrays?
+        q_values = model_critic.predict([state_input], steps=1)[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
+        action_player1 = np.random.choice(action_dims[0], p=action_dist[0, 0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
+        action_player2 = np.random.choice(action_dims[0], p=action_dist[0, 1, :])
+        action_onehot = np.zeros((len(action_dims), action_dims[0]))
+        action_onehot[0][action_player1] = 1
+        action_onehot[1][action_player2] = 1
+        observation, reward, done, info = env.step([action_player1, action_player2])
+        iter_rewards[0] = iter_rewards[0] + reward[0]
+        iter_rewards[1] = iter_rewards[1] + reward[1]
+        print('itr: ' + str(itr) + ', action_player1=' + str(action_player1) + ', action_player2=' + str(action_player2) + ', reward=' + str(reward) + ', q val=' + str(q_values) + ', total rewards=' + str(iter_rewards))
         mask = not done
 
         states.append(state)
-        actions.append(action)
+        actions_player1.append(action_player1)
+        actions_player2.append(action_player2)
         actions_onehot.append(action_onehot)
-        values.append(q_value)
+        values.append(q_values)
         masks.append(mask)
         rewards.append(reward)
         actions_probs.append(action_dist)
@@ -246,34 +254,31 @@ while not target_reached and iters < max_iters:
         state = observation
         if done:
             env.reset()
-    q_value = model_critic.predict(state_input, steps=1)
-    values.append(q_value)
+    q_values = model_critic.predict(state_input, steps=1)[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
+    values.append(q_values)
     returns, advantages = get_advantages(values, masks, rewards)
    # print(values[:-1])
     #print("values reshaped:")
    # print(np.reshape(values[:-1], newshape=(128, -1)))
-    #states = np.reshape(states, newshape=(128, 72, 96, 3))
-    states = np.reshape(states, newshape=(ppo_steps, 115))
-    actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, 1, 19))
-    rewards = np.reshape(rewards, newshape=(ppo_steps, 1, 1))
-    values = np.reshape(values, newshape=(ppo_steps+1, 1, 1))
-    # actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 19))
-    actor_loss = model_actor.fit(
-        [states, actions_probs, advantages, np.reshape(rewards, newshape=(-1, 1, 1)), values[:-1]],
-        [(np.reshape(actions_onehot, newshape=(ppo_steps, n_actions)))], verbose=True, shuffle=True, epochs=8,
-        callbacks=[tensor_board])
-    critic_loss = model_critic.fit([states], [np.reshape(returns, newshape=(-1, 1))], shuffle=True, epochs=8,
+    #states = np.reshape(states, newshape=(128, 72, 96, 3)) for pixels
+    #states = np.reshape(states, newshape=(ppo_steps,len(action_dims), 115))
+    actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, len(action_dims), action_dims[0]))
+    advantages = np.reshape(advantages, newshape=(ppo_steps, len(action_dims), 1))
+    rewards = np.reshape(rewards, newshape=(ppo_steps, len(action_dims), 1))
+    values = np.reshape(values, newshape=(ppo_steps+1, len(action_dims), 1))
+    returns = np.reshape(returns, newshape=(ppo_steps, len(action_dims), 1))
+    #actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, len(action_dims), action_dims[0]))
+    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8,
                                    verbose=True, callbacks=[tensor_board])
-    # actor_loss = model_actor.fit(
-    #     [states, actions_probs, advantages, np.reshape(rewards, newshape=(-1, 1, 1)), values[:-1]],
-    #     [(np.reshape(actions_onehot, newshape=(-1, n_actions)))], verbose=True, shuffle=True, epochs=8,
-    #     callbacks=[tensor_board])
-    # critic_loss = model_critic.fit([states], [np.reshape(returns, newshape=(-1, 1))], shuffle=True, epochs=8,
-    #                                verbose=True, callbacks=[tensor_board])
+    actor_loss = model_actor.fit(
+        [states, actions_probs, advantages, rewards, values[:-1]],
+        [(np.reshape(actions_onehot, newshape=(ppo_steps, len(action_dims), action_dims[0])))], verbose=True, shuffle=True, epochs=8,
+        callbacks=[tensor_board])
+
     #avg_reward = np.mean([test_reward() for _ in range(5)])
-    print('total test reward=' + str(iter_rewards))
-    if iter_rewards > 0:
-        print('best reward=' + str(iter_rewards))
+    print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
+    if iter_rewards[0] > 0:
+        print('best reward=' + str(iter_rewards[0]))
         #model_actor.save('model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
         #model_critic.save('model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
        #best_reward = avg_reward
