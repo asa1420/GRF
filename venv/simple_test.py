@@ -6,13 +6,14 @@ import tensorflow as tf
 import os.path
 from tensorflow.keras.models import Model, load_model
 
-env = football_env.create_environment(env_name='5_vs_5', representation='simple115',render=True)
+env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115', render=True)
 
 n_actions = env.action_space.n
 dummy_n = np.zeros((1, 1, n_actions))
 dummy_1 = np.zeros((1, 1, 1))
 
 model_actor = load_model('models/Empty Goal Models/model_actor_147_1.0.hdf5', custom_objects={'loss': 'categorical_hinge'})
+
 state = env.reset()
 done = False
 total_rewards = 0

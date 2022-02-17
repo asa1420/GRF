@@ -187,9 +187,9 @@ def one_hot_encoding(probs):
 image_based = False
 
 if image_based:
-    env = football_env.create_environment(env_name='5_vs_5', representation='pixels', render=True)
+    env = football_env.create_environment(env_name='5_vs_5', representation='pixels', render=False)
 else:
-    env = football_env.create_environment(env_name='5_vs_5', representation='simple115v2', render=True, rewards='scoring,checkpoints', number_of_left_players_agent_controls=2)
+    env = football_env.create_environment(env_name='5_vs_5', representation='simple115v2', render=False, rewards='scoring,checkpoints', number_of_left_players_agent_controls=2)
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -209,11 +209,11 @@ else:
     # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
     # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 300
+ppo_steps = 256
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 150
+max_iters = 78
 
 while not target_reached and iters < max_iters:
     iter_rewards = np.zeros(2)
@@ -277,13 +277,8 @@ while not target_reached and iters < max_iters:
 
     #avg_reward = np.mean([test_reward() for _ in range(5)])
     print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
-    if iter_rewards[0] > 0:
-        print('best reward=' + str(iter_rewards[0]))
-        #model_actor.save('model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
-        #model_critic.save('model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
-       #best_reward = avg_reward
-    #if best_reward > 10 or iters > max_iters:
-     #   target_reached = True
+    model_actor.save('models/3v3/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+    model_critic.save('models/3v3/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
     iters += 1
     env.reset()
 
