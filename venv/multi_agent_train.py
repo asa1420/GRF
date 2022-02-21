@@ -210,7 +210,7 @@ else:
     # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
     # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 256
+ppo_steps = 25
 target_reached = False
 best_reward = 0
 iters = 0
@@ -230,14 +230,23 @@ while not target_reached and iters < max_iters:
 
     for itr in range(ppo_steps):
         state_input = K.expand_dims(state, 0)
+        action_dist = np.zeros([2, 19])
+        q_values = np.zeros(2)
         #action_dist = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1) # why do we pass dummy here? instead of the actual arrays?
+
         #q_values = model_critic.predict([state_input], steps=1)[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
-        action_dist = model_actor([state_input, dummy_n, dummy_1, dummy_1, dummy_1])
-        action_dist = action_dist.numpy()
+        # with tf.compat.v1.Session() as sess:
+        action_dist_tensor = model_actor([state_input, dummy_n, dummy_1, dummy_1, dummy_1])
+        #     y = tf.constant(2)
+        #     print(action_dist_tensor.eval())
+        # for i in range(2):
+        #     for j in range(19):
+        #         action_dist[i, j] = action_dist_tensor[i, j].item()
+        action_dist = action_dist_tensor.numpy()
         print(action_dist)
         #q_values = model_critic([state_input])[0, :, 0]
-        q_values = model_critic([state_input])
-        q_values = q_values.numpy()[0, :, 0]
+        q_values_tensor = model_critic([state_input])
+        q_values = q_values_tensor.numpy()[0, :, 0]
         action_player1 = np.random.choice(action_dims[0], p=action_dist[0, 0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
         action_player2 = np.random.choice(action_dims[0], p=action_dist[0, 1, :])
         action_onehot = np.zeros((len(action_dims), action_dims[0]))
@@ -246,7 +255,7 @@ while not target_reached and iters < max_iters:
         observation, reward, done, info = env.step([action_player1, action_player2])
         iter_rewards[0] = iter_rewards[0] + reward[0]
         iter_rewards[1] = iter_rewards[1] + reward[1]
-        print('itr: ' + str(itr) + ', action_player1=' + str(action_player1) + ', action_player2=' + str(action_player2) + ', reward=' + str(reward) + ', q val=' + str(q_values) + ', total rewards=' + str(iter_rewards))
+        #print('itr: ' + str(itr) + ', action_player1=' + str(action_player1) + ', action_player2=' + str(action_player2) + ', reward=' + str(reward) + ', q val=' + str(q_values) + ', total rewards=' + str(iter_rewards))
         mask = not done
 
         states.append(state)
@@ -261,14 +270,14 @@ while not target_reached and iters < max_iters:
         state = observation
         if done:
             env.reset()
-    q_values = model_critic.predict(state_input, steps=1)[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
+    q_values_tensor = model_critic([state_input]).numpy()[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
     values.append(q_values)
     returns, advantages = get_advantages(values, masks, rewards)
    # print(values[:-1])
     #print("values reshaped:")
    # print(np.reshape(values[:-1], newshape=(128, -1)))
     #states = np.reshape(states, newshape=(128, 72, 96, 3)) for pixels
-    states = np.reshape(states, newshape=(ppo_steps,len(action_dims), 115))
+    states = np.reshape(states, newshape=(ppo_steps, len(action_dims), 115))
     actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, len(action_dims), action_dims[0]))
     advantages = np.reshape(advantages, newshape=(ppo_steps, len(action_dims), 1))
     rewards = np.reshape(rewards, newshape=(ppo_steps, len(action_dims), 1))
