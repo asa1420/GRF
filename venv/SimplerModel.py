@@ -8,7 +8,10 @@ from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
-
+import time
+import os
+start = time.time()
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # to stop tensorflow output messages in red.
 gamma = 0.99
 lambda_ = 0.95
 
@@ -59,6 +62,17 @@ def get_model_actor_image(input_dims):
     model.compile(optimizer=Adam(lr=1e-4), loss='mse')
     model.summary()
     return model
+def get_model_actor_simple(input_dims):
+    state_input = Input(shape=input_dims)
+    # Classification block
+    x = Dense(512, activation='relu', name='fc1')(state_input) # second layer? it is a hidden layer with 512 neurons
+    x = Dense(256, activation='relu', name='fc2')(x) # Third layer?
+    out_actions = Dense(n_actions, activation='softmax', name='predictions')(x) # output layer
+    # Define model
+    model = Model(inputs=[state_input], outputs=[out_actions]) # the model takes as input the current state and outputs a list of actions
+    model.compile(optimizer=Adam(lr=1e-4), loss='mse')
+    model.summary()
+    return model
 
 def get_model_critic_image(input_dims):
     state_input = Input(shape=input_dims)
@@ -78,25 +92,36 @@ def get_model_critic_image(input_dims):
     model.compile(optimizer=Adam(lr=1e-4), loss='mse')
     model.summary()
     return model
+def get_model_critic_simple(input_dims):
+    state_input = Input(shape=input_dims)
 
-env = football_env.create_environment(env_name="academy_empty_goal", rewards='scoring, checkpoints', representation="pixels", render=True)
+    # Classification block
+    x = Dense(512, activation='relu', name='fc1')(state_input)
+    x = Dense(256, activation='relu', name='fc2')(x)
+    out_actions = Dense(1, activation='tanh')(x)
+
+    model = Model(inputs=[state_input], outputs=[out_actions])
+    model.compile(optimizer=Adam(lr=1e-4), loss='mse')
+    model.summary()
+    return model
+
+env = football_env.create_environment(env_name="academy_empty_goal", rewards='scoring,checkpoints', representation="simple115v2", render=False)
 state = env.reset()
 state_dims = env.observation_space.shape
-print(state_dims)
 n_actions = env.action_space.n
-print(n_actions)
-
 tensor_board = TensorBoard(log_dir='./logs')
 
-ppo_steps = 100
+ppo_steps = 128
 target_reached = False
-best_reward = 0
 iters = 0
-max_iters = 5
+max_iters = 1
 
-model_actor = get_model_actor_image(input_dims=state_dims)
-model_critic = get_model_critic_image(input_dims=state_dims)
-while not target_reached and iters < max_iters:
+#model_actor = get_model_actor_simple(input_dims=state_dims)
+#model_critic = get_model_critic_simple(input_dims=state_dims)
+model_actor = load_model('models/Empty Goal MSE/model_actor_780_0.10000000149011612.hdf5', custom_objects={'loss': 'categorical_hinge'})
+model_critic = load_model('models/Empty Goal MSE/model_actor_780_0.10000000149011612.hdf5', custom_objects={'loss': 'categorical_hinge'})
+while iters < max_iters:
+    iter_rewards = 0
     states = []
     actions = []
     values = []
@@ -108,13 +133,22 @@ while not target_reached and iters < max_iters:
 
     for itr in range(ppo_steps): # collect 128 interactions with the game
         state_input = K.expand_dims(state, 0)
-        action_dist = model_actor.predict([state_input], steps=1) # uses the actor model to predict the best actions
-        q_value = model_critic.predict([state_input], steps=1)  # uses the critic model to predict the q value.
+        s1 = time.time()
+        # action_dist_tensor = model_actor([state_input]) # uses the actor model to predict the best actions
+        # action_dist = action_dist_tensor.numpy()
+        action_dist = model_actor.predict([state_input])
+        print("predict action: " + str(time.time() - s1))
+        s2 = time.time()
+        # q_value_tensor = model_critic([state_input])
+        # q_value = q_value_tensor.numpy()[0, 0]
+        q_value = model_critic.predict([state_input])[0, 0]
+        print("predict q value: " + str(time.time() - s2))
         action = np.random.choice(n_actions, p=action_dist[0, :]) # picks an action based on the action distribution from the actor model
         action_onehot = np.zeros(n_actions)
         action_onehot[action] = 1
         observation, reward, done, info = env.step(action)
-        print('itr: ' + str(itr) + ', action=' + str(action) + ', reward=' + str(reward) + ', q val=' + str(q_value))
+        iter_rewards = iter_rewards + reward
+        #print('itr: ' + str(itr) + ', action=' + str(action) + ', reward=' + str(reward) + ', q val=' + str(q_value))
         mask = not done
 
         states.append(state)
@@ -130,26 +164,27 @@ while not target_reached and iters < max_iters:
         if done:
             env.reset() # reset if the game is done
     state_input = K.expand_dims(state, 0)
-    q_value = model_critic.predict([state_input], steps=1)
+    # q_value_tensor = model_critic([state_input])
+    # q_value = q_value_tensor.numpy()[0, 0]
+    q_value = model_critic.predict([state_input])[0, 0]
     values.append(q_value)
-    returns, advantages = get_advantages(values, masks, rewards)
-    print(len(states))
-    print(len(actions_onehot))
-    print(len(returns))
+    returns, advantages = get_advantages(values, masks, rewards) # useless without PPO
+    states = np.reshape(states, newshape=(ppo_steps, 115))
+    actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, n_actions))
+    advantages = np.reshape(advantages, newshape=(ppo_steps, 1, 1))
+    rewards = np.reshape(rewards, newshape=(ppo_steps, 1))
+    values = np.reshape(values, newshape=(ppo_steps+1, 1))[:-1]
+    returns = np.reshape(returns, newshape=(ppo_steps, 1))
+    actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 1, n_actions))
     actor_loss = model_actor.fit(
-            [np.reshape(states, newshape=(ppo_steps, 72, 96, 3))], [np.reshape(actions_onehot, newshape=(-1, n_actions))], verbose=True, shuffle=True, epochs=8,
+            [states], [actions_onehot], verbose=True, shuffle=True, epochs=8,
             callbacks=[tensor_board])
-    critic_loss = model_critic.fit([np.reshape(states, newshape=(ppo_steps, 72, 96, 3))], [np.reshape(returns, newshape=(-1, 1))], shuffle=True, epochs=8, verbose=True, callbacks=[tensor_board])
+    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8, verbose=True, callbacks=[tensor_board])
     #avg_reward = np.mean([test_reward() for _ in range(5)])
-    avg_reward = sum(rewards)
-    print('total test reward=' + str(avg_reward))
-    if avg_reward > best_reward:
-        print('best reward=' + str(avg_reward))
-        model_actor.save('model_actor_{}_{}.hdf5'.format(iters, avg_reward))
-        model_critic.save('model_critic_{}_{}.hdf5'.format(iters, avg_reward))
-        best_reward = avg_reward
-    if best_reward > 20 or iters > max_iters:
-        target_reached = True
+    print('total rewards =' + str(iter_rewards))
+    model_actor.save('models/Empty Goal MSE exp/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+    model_critic.save('models/Empty Goal MSE exp/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
     iters += 1
     env.reset()
+print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
 env.close()

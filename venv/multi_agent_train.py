@@ -2,14 +2,19 @@ import gfootball.env as football_env
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.layers import Input, Dense, Conv2D, MaxPooling2D, Flatten
+from tensorflow.keras.layers import Input, Dense, Conv2D, MaxPooling2D, Flatten, Layer # Layer for the custom call function
 from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
 from tensorflow.python.framework.ops import disable_eager_execution
+from tensorflow.python.framework.ops import enable_eager_execution # hehe
 import time
+from PPO_loss_layer import PPO_loss_layer
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # to stop tensorflow output messages in red. still does not work.
 #disable_eager_execution()
+#enable_eager_execution()  # to use .numpy()
 clipping_val = 0.2
 critic_discount = 0.5
 entropy_beta = 0.001
@@ -111,19 +116,19 @@ def get_model_actor_simple(input_dims, output_dims):
     advantages = Input(shape=(2, 1,))
     rewards = Input(shape=(2, 1,))
     values = Input(shape=(2, 1,))
-
+    loss_layer = PPO_loss_layer(2)(state_input, oldpolicy_probs, advantages, rewards, values)
     # Classification block
-    x = Dense(512, activation='relu', name='fc1')(state_input) # second layer?
+    x = Dense(512, activation='relu', name='fc1')(state_input) # second layer? it is a hidden layer with 512 neurons
     x = Dense(256, activation='relu', name='fc2')(x) # Third layer?
-    out_actions = Dense(action_dims[0], activation='softmax', name='predictions')(x) # how do I make the output an array of 2 action spaces?
-    # it automatically became a 2-d array (2,19) i don't know how. maybe because the input state and oldpolicy_probs are now 2 instead of 1?
+    out_actions = Dense(action_dims[0], activation='softmax', name='predictions')(x) # output layer
     model = Model(inputs=[state_input, oldpolicy_probs, advantages, rewards, values],
-                  outputs=[out_actions])
-    model.compile(optimizer=Adam(lr=1e-4), loss=[ppo_loss(
+                  outputs=[loss_layer])
+    model.compile(optimizer=Adam(lr=1e-4), loss=[ppo_loss( # This is 100% the source of the issue! if I replace it with mse loss it works!
         oldpolicy_probs=oldpolicy_probs,
         advantages=advantages,
         rewards=rewards,
         values=values)])
+    #model.compile(optimizer=Adam(lr=1e-4), loss='mse')
     model.summary()
     return model
 
@@ -227,11 +232,10 @@ while not target_reached and iters < max_iters:
     actions_probs = []
     actions_onehot = []
     state_input = None
-
     for itr in range(ppo_steps):
         state_input = K.expand_dims(state, 0)
-        action_dist = np.zeros([2, 19])
-        q_values = np.zeros(2)
+        # action_dist = np.zeros([2, 19])
+        # q_values = np.zeros(2)
         #action_dist = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1) # why do we pass dummy here? instead of the actual arrays?
 
         #q_values = model_critic.predict([state_input], steps=1)[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
@@ -242,8 +246,8 @@ while not target_reached and iters < max_iters:
         # for i in range(2):
         #     for j in range(19):
         #         action_dist[i, j] = action_dist_tensor[i, j].item()
+
         action_dist = action_dist_tensor.numpy()
-        print(action_dist)
         #q_values = model_critic([state_input])[0, :, 0]
         q_values_tensor = model_critic([state_input])
         q_values = q_values_tensor.numpy()[0, :, 0]
@@ -273,25 +277,31 @@ while not target_reached and iters < max_iters:
     q_values_tensor = model_critic([state_input]).numpy()[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
     values.append(q_values)
     returns, advantages = get_advantages(values, masks, rewards)
-   # print(values[:-1])
-    #print("values reshaped:")
-   # print(np.reshape(values[:-1], newshape=(128, -1)))
-    #states = np.reshape(states, newshape=(128, 72, 96, 3)) for pixels
+
+    #states = np.reshape(states, newshape=(ppo_steps, 72, 96, 3)) for pixels
     states = np.reshape(states, newshape=(ppo_steps, len(action_dims), 115))
     actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, len(action_dims), action_dims[0]))
     advantages = np.reshape(advantages, newshape=(ppo_steps, len(action_dims), 1))
     rewards = np.reshape(rewards, newshape=(ppo_steps, len(action_dims), 1))
-    values = np.reshape(values, newshape=(ppo_steps+1, len(action_dims), 1))
+    values = np.reshape(values, newshape=(ppo_steps+1, len(action_dims), 1))[:-1]
     returns = np.reshape(returns, newshape=(ppo_steps, len(action_dims), 1))
-    #actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, len(action_dims), action_dims[0]))
+    actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, len(action_dims), action_dims[0]))
+    # states_d = tf.TensorArray(states, size=len(states))
+    # returns_d = tf.TensorArray(returns, size=len(returns))
+    # actions_probs_d = tf.TensorArray(actions_probs, size=len(actions_probs))
+    # advantages_d = tf.TensorArray(advantages, size=len(advantages))
+    # rewards_d = tf.TensorArray(rewards, size=len(rewards))
+    # values_d = tf.TensorArray(values, size=len(values))
+    # actions_onehot_d = tf.TensorArray(actions_onehot, size=len(actions_onehot))
+
     critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8,
                                    verbose=True, callbacks=[tensor_board])
+
     actor_loss = model_actor.fit(
-        [states, actions_probs, advantages, rewards, values[:-1]],
-        [(np.reshape(actions_onehot, newshape=(ppo_steps, len(action_dims), action_dims[0])))], verbose=True, shuffle=True, epochs=8,
+        [states, actions_probs, advantages, rewards, values],
+        [actions_onehot], verbose=True, shuffle=True, epochs=8,
         callbacks=[tensor_board])
 
-    #avg_reward = np.mean([test_reward() for _ in range(5)])
     print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
     model_actor.save('models/3v3/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
     model_critic.save('models/3v3/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
