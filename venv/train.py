@@ -188,7 +188,7 @@ image_based = False
 if image_based:
     env = football_env.create_environment(env_name='academy_empty_goal', representation='pixels', render=True)
 else:
-    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115v2', rewards='scoring,checkpoints')
+    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115v2')
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -277,8 +277,8 @@ while not target_reached and iters < max_iters:
     #avg_reward = np.mean([test_reward() for _ in range(5)])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards))
     if iter_rewards > 0:
-        model_actor.save('models/Empty_Goal/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
-        model_critic.save('models/Empty_Goal/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_actor.save('models/Empty_Goal_noCheckpoint/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_critic.save('models/Empty_Goal_noCheckpoint/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
     iters += 1
     env.reset()
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends

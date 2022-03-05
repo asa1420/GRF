@@ -13,7 +13,7 @@ n_actions = env.action_space.n
 dummy_n = np.zeros((1, 1, n_actions))
 dummy_1 = np.zeros((1, 1, 1))
 
-model_actor = load_model('models/Empty Goal MSE/model_actor_734_1.000000074505806.hdf5', custom_objects={'loss': 'categorical_hinge'})
+model_actor = load_model('models/Empty_Goal/model_actor_780_0.7000000104308128.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
 state = env.reset()
 done = False
@@ -22,10 +22,10 @@ restart_counter = 0
 while True:
     state_input = K.expand_dims(state, 0)
     s1 = time.time()
-    action_dist_tensor = model_actor([state_input])  # uses the actor model to predict the best actions
+    action_dist_tensor = model_actor([state_input, dummy_n, dummy_1, dummy_1, dummy_1]) # uses the actor model to predict the best actions
   #  action_dist = model_actor.predict([state_input])
     action_dist = action_dist_tensor.numpy()
-    print("predict action: " + str(time.time() - s1))
+    #print("predict action: " + str(time.time() - s1))
     action = np.random.choice(n_actions, p=action_dist[0, :])
     next_state, reward, done, _ = env.step(action)
     total_rewards += reward
