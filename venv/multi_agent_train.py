@@ -12,7 +12,7 @@ from tensorflow.python.framework.ops import enable_eager_execution # hehe
 import time
 from PPO_loss_layer import PPO_loss_layer
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # to stop tensorflow output messages in red. still does not work.
+#os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # to stop tensorflow output messages in red. still does not work.
 #disable_eager_execution()
 #enable_eager_execution()  # to use .numpy()
 clipping_val = 0.2
@@ -116,18 +116,18 @@ def get_model_actor_simple(input_dims, output_dims):
     advantages = Input(shape=(2, 1,))
     rewards = Input(shape=(2, 1,))
     values = Input(shape=(2, 1,))
-    loss_layer = PPO_loss_layer(2)(state_input, oldpolicy_probs, advantages, rewards, values)
+    #loss_layer = PPO_loss_layer(2)(state_input, oldpolicy_probs, advantages, rewards, values)
     # Classification block
     x = Dense(512, activation='relu', name='fc1')(state_input) # second layer? it is a hidden layer with 512 neurons
     x = Dense(256, activation='relu', name='fc2')(x) # Third layer?
     out_actions = Dense(action_dims[0], activation='softmax', name='predictions')(x) # output layer
     model = Model(inputs=[state_input, oldpolicy_probs, advantages, rewards, values],
-                  outputs=[loss_layer])
+                  outputs=[out_actions])
     model.compile(optimizer=Adam(lr=1e-4), loss=[ppo_loss( # This is 100% the source of the issue! if I replace it with mse loss it works!
         oldpolicy_probs=oldpolicy_probs,
         advantages=advantages,
         rewards=rewards,
-        values=values)])
+        values=values)], experimental_run_tf_function=False)
     #model.compile(optimizer=Adam(lr=1e-4), loss='mse')
     model.summary()
     return model
