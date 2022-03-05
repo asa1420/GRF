@@ -257,9 +257,9 @@ while not target_reached and iters < max_iters:
     states = np.reshape(states, newshape=(ppo_steps, 115))
     actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, 1, n_actions))
     advantages = np.reshape(advantages, newshape=(ppo_steps, 1, 1))
-    rewards = np.reshape(rewards, newshape=(ppo_steps, 1))
-    values = np.reshape(values, newshape=(ppo_steps+1, 1))[:-1]
-    returns = np.reshape(returns, newshape=(ppo_steps, 1))
+    rewards = np.reshape(rewards, newshape=(ppo_steps, 1, 1))
+    values = np.reshape(values, newshape=(ppo_steps+1, 1, 1))[:-1]
+    returns = np.reshape(returns, newshape=(ppo_steps, 1, 1))
     actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 1, n_actions))
     # actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 19))
     actor_loss = model_actor.fit(
