@@ -8,7 +8,10 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
 from tensorflow.python.framework.ops import disable_eager_execution
-disable_eager_execution()
+import time
+import os
+start = time.time()
+#disable_eager_execution()
 clipping_val = 0.2
 critic_discount = 0.5
 entropy_beta = 0.001
@@ -102,7 +105,7 @@ def get_model_actor_image(input_dims, output_dims):
 
 def get_model_actor_simple(input_dims, output_dims):
     state_input = Input(shape=input_dims)
-    oldpolicy_probs = Input(shape=(1, output_dims,))
+    oldpolicy_probs = Input(shape=(1, output_dims,), name='actions_probs')
     advantages = Input(shape=(1, 1,))
     rewards = Input(shape=(1, 1,))
     values = Input(shape=(1, 1,))
@@ -118,7 +121,7 @@ def get_model_actor_simple(input_dims, output_dims):
         oldpolicy_probs=oldpolicy_probs,
         advantages=advantages,
         rewards=rewards,
-        values=values)])
+        values=values)], experimental_run_tf_function=False)
     model.summary()
     return model
 
@@ -185,7 +188,7 @@ image_based = False
 if image_based:
     env = football_env.create_environment(env_name='academy_empty_goal', representation='pixels', render=True)
 else:
-    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115')
+    env = football_env.create_environment(env_name='academy_empty_goal', representation='simple115v2', rewards='scoring,checkpoints')
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -209,7 +212,7 @@ ppo_steps = 128
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 150
+max_iters = 781
 
 while not target_reached and iters < max_iters:
     iter_rewards = 0
@@ -224,15 +227,16 @@ while not target_reached and iters < max_iters:
 
     for itr in range(ppo_steps):
         state_input = K.expand_dims(state, 0)
-        action_dist = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1)
-        q_value = model_critic.predict([state_input], steps=1)
+        action_dist_tensor = model_actor([state_input, dummy_n, dummy_1, dummy_1, dummy_1])
+        action_dist = action_dist_tensor.numpy()
+        q_value = model_critic([state_input]).numpy()[0, 0]
         action = np.random.choice(n_actions, p=action_dist[0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
         action_onehot = np.zeros(n_actions)
         action_onehot[action] = 1
 
         observation, reward, done, info = env.step(action)
         iter_rewards = iter_rewards + reward
-        print('itr: ' + str(itr) + ', action=' + str(action) + ', reward=' + str(reward) + ', q val=' + str(q_value) + ', total rewards=' + str(iter_rewards))
+        #print('itr: ' + str(itr) + ', action=' + str(action) + ', reward=' + str(reward) + ', q val=' + str(q_value) + ', total rewards=' + str(iter_rewards))
         mask = not done
 
         states.append(state)
@@ -246,23 +250,23 @@ while not target_reached and iters < max_iters:
         state = observation
         if done:
             env.reset()
-    q_value = model_critic.predict(state_input, steps=1)
+    q_value = model_critic([state_input]).numpy()[0, 0] # the bracket at the end is to get rid of the redundant first dimension
     values.append(q_value)
     returns, advantages = get_advantages(values, masks, rewards)
-   # print(values[:-1])
-    #print("values reshaped:")
-   # print(np.reshape(values[:-1], newshape=(128, -1)))
     #states = np.reshape(states, newshape=(128, 72, 96, 3))
     states = np.reshape(states, newshape=(ppo_steps, 115))
-    actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, 1, 19))
-    rewards = np.reshape(rewards, newshape=(ppo_steps, 1, 1))
-    values = np.reshape(values, newshape=(ppo_steps+1, 1, 1))
+    actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, 1, n_actions))
+    advantages = np.reshape(advantages, newshape=(ppo_steps, 1, 1))
+    rewards = np.reshape(rewards, newshape=(ppo_steps, 1))
+    values = np.reshape(values, newshape=(ppo_steps+1, 1))[:-1]
+    returns = np.reshape(returns, newshape=(ppo_steps, 1))
+    actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 1, n_actions))
     # actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 19))
     actor_loss = model_actor.fit(
-        [states, actions_probs, advantages, np.reshape(rewards, newshape=(-1, 1, 1)), values[:-1]],
-        [(np.reshape(actions_onehot, newshape=(ppo_steps, n_actions)))], verbose=True, shuffle=True, epochs=8,
+        [states, actions_probs, advantages, rewards, values],
+        [actions_onehot], verbose=True, shuffle=True, epochs=8,
         callbacks=[tensor_board])
-    critic_loss = model_critic.fit([states], [np.reshape(returns, newshape=(-1, 1))], shuffle=True, epochs=8,
+    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8,
                                    verbose=True, callbacks=[tensor_board])
     # actor_loss = model_actor.fit(
     #     [states, actions_probs, advantages, np.reshape(rewards, newshape=(-1, 1, 1)), values[:-1]],
@@ -271,15 +275,11 @@ while not target_reached and iters < max_iters:
     # critic_loss = model_critic.fit([states], [np.reshape(returns, newshape=(-1, 1))], shuffle=True, epochs=8,
     #                                verbose=True, callbacks=[tensor_board])
     #avg_reward = np.mean([test_reward() for _ in range(5)])
-    print('total test reward=' + str(iter_rewards))
+    print('total test reward of iteration {} = {}'.format(iters, iter_rewards))
     if iter_rewards > 0:
-        print('best reward=' + str(iter_rewards))
-        model_actor.save('model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
-        model_critic.save('model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
-       #best_reward = avg_reward
-    #if best_reward > 10 or iters > max_iters:
-     #   target_reached = True
+        model_actor.save('models/Empty Goal/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_critic.save('models/Empty Goal/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
     iters += 1
     env.reset()
-
+print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
 env.close()
