@@ -212,7 +212,7 @@ ppo_steps = 128
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 781
+max_iters = 7813
 
 while not target_reached and iters < max_iters:
     iter_rewards = 0
@@ -276,9 +276,9 @@ while not target_reached and iters < max_iters:
     #                                verbose=True, callbacks=[tensor_board])
     #avg_reward = np.mean([test_reward() for _ in range(5)])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards))
-    if iter_rewards > 0:
+    if not iters%10: # save actor models in increments of 10
         model_actor.save('models/Empty_Goal_noCheckpoint/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
-        model_critic.save('models/Empty_Goal_noCheckpoint/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
+        #model_critic.save('models/Empty_Goal_noCheckpoint/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
     iters += 1
     env.reset()
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
