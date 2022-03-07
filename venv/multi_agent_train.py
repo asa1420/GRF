@@ -12,6 +12,7 @@ from tensorflow.python.framework.ops import enable_eager_execution # hehe
 import time
 from PPO_loss_layer import PPO_loss_layer
 import os
+start = time.time()
 #os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # to stop tensorflow output messages in red. still does not work.
 #disable_eager_execution()
 #enable_eager_execution()  # to use .numpy()
@@ -123,7 +124,7 @@ def get_model_actor_simple(input_dims, output_dims):
     out_actions = Dense(action_dims[0], activation='softmax', name='predictions')(x) # output layer
     model = Model(inputs=[state_input, oldpolicy_probs, advantages, rewards, values],
                   outputs=[out_actions])
-    model.compile(optimizer=Adam(lr=1e-4), loss=[ppo_loss( # This is 100% the source of the issue! if I replace it with mse loss it works!
+    model.compile(optimizer=Adam(lr=1e-4), loss=[ppo_loss(
         oldpolicy_probs=oldpolicy_probs,
         advantages=advantages,
         rewards=rewards,
@@ -215,11 +216,11 @@ else:
     # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
     # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 25
+ppo_steps = 256
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 78
+max_iters = 3906
 
 while not target_reached and iters < max_iters:
     iter_rewards = np.zeros(2)
@@ -286,26 +287,20 @@ while not target_reached and iters < max_iters:
     values = np.reshape(values, newshape=(ppo_steps+1, len(action_dims), 1))[:-1]
     returns = np.reshape(returns, newshape=(ppo_steps, len(action_dims), 1))
     actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, len(action_dims), action_dims[0]))
-    # states_d = tf.TensorArray(states, size=len(states))
-    # returns_d = tf.TensorArray(returns, size=len(returns))
-    # actions_probs_d = tf.TensorArray(actions_probs, size=len(actions_probs))
-    # advantages_d = tf.TensorArray(advantages, size=len(advantages))
-    # rewards_d = tf.TensorArray(rewards, size=len(rewards))
-    # values_d = tf.TensorArray(values, size=len(values))
-    # actions_onehot_d = tf.TensorArray(actions_onehot, size=len(actions_onehot))
 
-    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8,
+    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=1,
                                    verbose=True, callbacks=[tensor_board])
 
     actor_loss = model_actor.fit(
         [states, actions_probs, advantages, rewards, values],
-        [actions_onehot], verbose=True, shuffle=True, epochs=8,
+        [actions_onehot], verbose=True, shuffle=True, epochs=1,
         callbacks=[tensor_board])
-
-    print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
-    model_actor.save('models/3v3/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
-    model_critic.save('models/3v3/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+    print('total test reward of iteration {} = {}'.format(iters, iter_rewards[0]))
+    #print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
+    if not iters % 5:  # save actor models in increments of 5
+        model_actor.save('models/3vs3/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+        env.reset() # does not reset game after every iteration now
+        #model_critic.save('models/3v3/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
     iters += 1
-    env.reset()
-
+print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
 env.close()
