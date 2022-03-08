@@ -2,20 +2,16 @@ import gfootball.env as football_env
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.layers import Input, Dense, Conv2D, MaxPooling2D, Flatten, Layer # Layer for the custom call function
+from tensorflow.keras.layers import Input, Dense, Conv2D, MaxPooling2D, Flatten
 from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
 from tensorflow.python.framework.ops import disable_eager_execution
-from tensorflow.python.framework.ops import enable_eager_execution # hehe
 import time
-from PPO_loss_layer import PPO_loss_layer
 import os
 start = time.time()
-#os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # to stop tensorflow output messages in red. still does not work.
 #disable_eager_execution()
-#enable_eager_execution()  # to use .numpy()
 clipping_val = 0.2
 critic_discount = 0.5
 entropy_beta = 0.001
@@ -24,18 +20,14 @@ lmbda = 0.95
 
 
 def get_advantages(values, masks, rewards):
-    returns = np.zeros((ppo_steps, 2)) # for two players
-    gae1 = 0
-    gae2 = 0
+    returns = []
+    gae = 0
     for i in reversed(range(len(rewards))):
-        delta1 = rewards[i][0] + gamma * values[i + 1][0] * masks[i] - values[i][0]
-        gae1 = delta1 + gamma * lmbda * masks[i] * gae1
-        delta2 = rewards[i][1] + gamma * values[i + 1][1] * masks[i] - values[i][1]
-        gae2 = delta2 + gamma * lmbda * masks[i] * gae2
-        returns[i][0] = gae1 + values[i][0]
-        returns[i][1] = gae2 + values[i][1]
+        delta = rewards[i] + gamma * values[i + 1] * masks[i] - values[i]
+        gae = delta + gamma * lmbda * masks[i] * gae
+        returns.insert(0, gae + values[i]) # insert at position zero
 
-    adv = returns - values[:-1]
+    adv = np.array(returns) - values[:-1]
     return returns, (adv - np.mean(adv)) / (np.std(adv) + 1e-10) # advantages is normalised and a residue is added to prevent division by zero
 
 
@@ -113,15 +105,16 @@ def get_model_actor_image(input_dims, output_dims):
 
 def get_model_actor_simple(input_dims, output_dims):
     state_input = Input(shape=input_dims)
-    oldpolicy_probs = Input(shape=(2, output_dims[0],)) # changed to make it suitable for two players
-    advantages = Input(shape=(2, 1,))
-    rewards = Input(shape=(2, 1,))
-    values = Input(shape=(2, 1,))
-    #loss_layer = PPO_loss_layer(2)(state_input, oldpolicy_probs, advantages, rewards, values)
+    oldpolicy_probs = Input(shape=(1, output_dims,), name='actions_probs')
+    advantages = Input(shape=(1, 1,))
+    rewards = Input(shape=(1, 1,))
+    values = Input(shape=(1, 1,))
+
     # Classification block
-    x = Dense(512, activation='relu', name='fc1')(state_input) # second layer? it is a hidden layer with 512 neurons
-    x = Dense(256, activation='relu', name='fc2')(x) # Third layer?
-    out_actions = Dense(action_dims[0], activation='softmax', name='predictions')(x) # output layer
+    x = Dense(512, activation='relu', name='fc1')(state_input)
+    x = Dense(256, activation='relu', name='fc2')(x)
+    out_actions = Dense(n_actions, activation='softmax', name='predictions')(x)
+
     model = Model(inputs=[state_input, oldpolicy_probs, advantages, rewards, values],
                   outputs=[out_actions])
     model.compile(optimizer=Adam(lr=1e-4), loss=[ppo_loss(
@@ -129,7 +122,6 @@ def get_model_actor_simple(input_dims, output_dims):
         advantages=advantages,
         rewards=rewards,
         values=values)], experimental_run_tf_function=False)
-    #model.compile(optimizer=Adam(lr=1e-4), loss='mse')
     model.summary()
     return model
 
@@ -167,25 +159,6 @@ def get_model_critic_simple(input_dims):
     return model
 
 
-def test_reward():
-    state = env.reset()
-    done = False
-    total_reward = 0
-    print('testing...')
-    limit = 0
-    while not done:
-        state_input = K.expand_dims(state, 0)
-        action_probs = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1)
-        action = np.argmax(action_probs)
-        next_state, reward, done, _ = env.step(action)
-        state = next_state
-        total_reward += reward
-        limit += 1
-        if limit > 20:
-            break
-    return total_reward
-
-
 def one_hot_encoding(probs):
     one_hot = np.zeros_like(probs)
     one_hot[:, np.argmax(probs, axis=1)] = 1
@@ -194,80 +167,63 @@ def one_hot_encoding(probs):
 image_based = False
 
 if image_based:
-    env = football_env.create_environment(env_name='3_vs_3', representation='pixels', render=False)
+    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='pixels', render=True)
 else:
-    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=False, rewards='scoring,checkpoints', number_of_left_players_agent_controls=2)
+    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=False, rewards='scoring', number_of_left_players_agent_controls=1)
 
 state = env.reset()
 state_dims = env.observation_space.shape
-action_dims = env.action_space.nvec # the number of actions now is an array of the number of actions for each player. For two players, it is [19 19]
+n_actions = env.action_space.n
 
-dummy_n = np.zeros((1, len(action_dims), action_dims[0])) # len(action_dims) = number of players being controlled
-dummy_1 = np.zeros((1, len(action_dims), 1)) # the extra 1 just adds an extra [] to the array, idk why it is needed (definitely for the neural network though)
-# I think it is the dimension for the batch size!
+dummy_n = np.zeros((1, 1, n_actions))
+dummy_1 = np.zeros((1, 1, 1))
+
 tensor_board = TensorBoard(log_dir='./logs')
 
 if image_based:
-    model_actor = get_model_actor_image(input_dims=state_dims, output_dims=action_dims)
+    model_actor = get_model_actor_image(input_dims=state_dims, output_dims=n_actions)
     model_critic = get_model_critic_image(input_dims=state_dims)
 else:
-    model_actor = get_model_actor_simple(input_dims=state_dims, output_dims=action_dims)
+    model_actor = get_model_actor_simple(input_dims=state_dims, output_dims=n_actions)
     model_critic = get_model_critic_simple(input_dims=state_dims)
     # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
     # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 256
+ppo_steps = 128
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 3906
+max_iters = 7813
 
 while not target_reached and iters < max_iters:
-    iter_rewards = np.zeros(2)
+    iter_rewards = 0
     states = []
-    actions_player1 = []
-    actions_player2 = []
+    actions = []
     values = []
     masks = []
     rewards = []
     actions_probs = []
     actions_onehot = []
     state_input = None
+
     for itr in range(ppo_steps):
         state_input = K.expand_dims(state, 0)
-        # action_dist = np.zeros([2, 19])
-        # q_values = np.zeros(2)
-        #action_dist = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1) # why do we pass dummy here? instead of the actual arrays?
-
-        #q_values = model_critic.predict([state_input], steps=1)[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
-        # with tf.compat.v1.Session() as sess:
         action_dist_tensor = model_actor([state_input, dummy_n, dummy_1, dummy_1, dummy_1])
-        #     y = tf.constant(2)
-        #     print(action_dist_tensor.eval())
-        # for i in range(2):
-        #     for j in range(19):
-        #         action_dist[i, j] = action_dist_tensor[i, j].item()
-
         action_dist = action_dist_tensor.numpy()
-        #q_values = model_critic([state_input])[0, :, 0]
-        q_values_tensor = model_critic([state_input])
-        q_values = q_values_tensor.numpy()[0, :, 0]
-        action_player1 = np.random.choice(action_dims[0], p=action_dist[0, 0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
-        action_player2 = np.random.choice(action_dims[0], p=action_dist[0, 1, :])
-        action_onehot = np.zeros((len(action_dims), action_dims[0]))
-        action_onehot[0][action_player1] = 1
-        action_onehot[1][action_player2] = 1
-        observation, reward, done, info = env.step([action_player1, action_player2])
-        iter_rewards[0] = iter_rewards[0] + reward[0]
-        iter_rewards[1] = iter_rewards[1] + reward[1]
-        #print('itr: ' + str(itr) + ', action_player1=' + str(action_player1) + ', action_player2=' + str(action_player2) + ', reward=' + str(reward) + ', q val=' + str(q_values) + ', total rewards=' + str(iter_rewards))
+        q_value = model_critic([state_input]).numpy()[0, 0]
+        action = np.random.choice(n_actions, p=action_dist[0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
+        action_onehot = np.zeros(n_actions)
+        action_onehot[action] = 1
+
+        observation, reward, done, info = env.step(action)
+        iter_rewards = iter_rewards + reward
+        #print('itr: ' + str(itr) + ', action=' + str(action) + ', reward=' + str(reward) + ', q val=' + str(q_value) + ', total rewards=' + str(iter_rewards))
         mask = not done
 
         states.append(state)
-        actions_player1.append(action_player1)
-        actions_player2.append(action_player2)
+        actions.append(action)
         actions_onehot.append(action_onehot)
-        values.append(q_values)
+        values.append(q_value)
         masks.append(mask)
         rewards.append(reward)
         actions_probs.append(action_dist)
@@ -275,32 +231,28 @@ while not target_reached and iters < max_iters:
         state = observation
         if done:
             env.reset()
-    q_values = model_critic([state_input]).numpy()[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
-    values.append(q_values)
+    q_value = model_critic([state_input]).numpy()[0, 0]
+    values.append(q_value)
     returns, advantages = get_advantages(values, masks, rewards)
-
-    #states = np.reshape(states, newshape=(ppo_steps, 72, 96, 3)) for pixels
-    states = np.reshape(states, newshape=(ppo_steps, len(action_dims), 115))
-    actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, len(action_dims), action_dims[0]))
-    advantages = np.reshape(advantages, newshape=(ppo_steps, len(action_dims), 1))
-    rewards = np.reshape(rewards, newshape=(ppo_steps, len(action_dims), 1))
-    values = np.reshape(values, newshape=(ppo_steps+1, len(action_dims), 1))[:-1]
-    returns = np.reshape(returns, newshape=(ppo_steps, len(action_dims), 1))
-    actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, len(action_dims), action_dims[0]))
-
-    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=1,
-                                   verbose=True, callbacks=[tensor_board])
-
+    #states = np.reshape(states, newshape=(128, 72, 96, 3))
+    states = np.reshape(states, newshape=(ppo_steps, 115))
+    actions_probs = np.reshape(actions_probs, newshape=(ppo_steps, 1, n_actions))
+    advantages = np.reshape(advantages, newshape=(ppo_steps, 1, 1))
+    rewards = np.reshape(rewards, newshape=(ppo_steps, 1, 1))
+    values = np.reshape(values, newshape=(ppo_steps+1, 1, 1))[:-1]
+    returns = np.reshape(returns, newshape=(ppo_steps, 1, 1))
+    actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 1, n_actions))
+    # actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 19))
     actor_loss = model_actor.fit(
         [states, actions_probs, advantages, rewards, values],
         [actions_onehot], verbose=True, shuffle=True, epochs=8,
         callbacks=[tensor_board])
-    print('total test reward of iteration {} = {}'.format(iters, iter_rewards[0]))
-    #print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
-    if not iters % 5:  # save actor models in increments of 5
-        model_actor.save('models/3vs3/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
-        env.reset() # does not reset game after every iteration now
-        #model_critic.save('models/3v3/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8,
+                                   verbose=True, callbacks=[tensor_board])
+    print('total test reward of iteration {} = {}'.format(iters, iter_rewards))
+    if not iters % 20: # save actor models in increments of 20
+        model_actor.save('models/3vs1_one/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+        env.reset()  # does not reset game after every iteration now
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
 env.close()

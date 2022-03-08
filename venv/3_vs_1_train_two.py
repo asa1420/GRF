@@ -166,26 +166,6 @@ def get_model_critic_simple(input_dims):
     model.summary()
     return model
 
-
-def test_reward():
-    state = env.reset()
-    done = False
-    total_reward = 0
-    print('testing...')
-    limit = 0
-    while not done:
-        state_input = K.expand_dims(state, 0)
-        action_probs = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1)
-        action = np.argmax(action_probs)
-        next_state, reward, done, _ = env.step(action)
-        state = next_state
-        total_reward += reward
-        limit += 1
-        if limit > 20:
-            break
-    return total_reward
-
-
 def one_hot_encoding(probs):
     one_hot = np.zeros_like(probs)
     one_hot[:, np.argmax(probs, axis=1)] = 1
@@ -194,9 +174,9 @@ def one_hot_encoding(probs):
 image_based = False
 
 if image_based:
-    env = football_env.create_environment(env_name='3_vs_3', representation='pixels', render=False)
+    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='pixels', render=False)
 else:
-    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=False, rewards='scoring,checkpoints', number_of_left_players_agent_controls=2)
+    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=False, rewards='scoring', number_of_left_players_agent_controls=2)
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -216,14 +196,14 @@ else:
     # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
     # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 256
+ppo_steps = 128
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 3906
+max_iters = 7813
 
 while not target_reached and iters < max_iters:
-    iter_rewards = np.zeros(2)
+    iter_rewards = np.zeros(len(action_dims))
     states = []
     actions_player1 = []
     actions_player2 = []
@@ -235,19 +215,7 @@ while not target_reached and iters < max_iters:
     state_input = None
     for itr in range(ppo_steps):
         state_input = K.expand_dims(state, 0)
-        # action_dist = np.zeros([2, 19])
-        # q_values = np.zeros(2)
-        #action_dist = model_actor.predict([state_input, dummy_n, dummy_1, dummy_1, dummy_1], steps=1) # why do we pass dummy here? instead of the actual arrays?
-
-        #q_values = model_critic.predict([state_input], steps=1)[0, :, 0] # the bracket at the end is to get rid of the redundant first dimension
-        # with tf.compat.v1.Session() as sess:
         action_dist_tensor = model_actor([state_input, dummy_n, dummy_1, dummy_1, dummy_1])
-        #     y = tf.constant(2)
-        #     print(action_dist_tensor.eval())
-        # for i in range(2):
-        #     for j in range(19):
-        #         action_dist[i, j] = action_dist_tensor[i, j].item()
-
         action_dist = action_dist_tensor.numpy()
         #q_values = model_critic([state_input])[0, :, 0]
         q_values_tensor = model_critic([state_input])
@@ -297,10 +265,9 @@ while not target_reached and iters < max_iters:
         callbacks=[tensor_board])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards[0]))
     #print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
-    if not iters % 5:  # save actor models in increments of 5
-        model_actor.save('models/3vs3/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+    if not iters % 20:  # save actor models in increments of 5
+        model_actor.save('models/3vs1_two/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
         env.reset() # does not reset game after every iteration now
-        #model_critic.save('models/3v3/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
 env.close()
