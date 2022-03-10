@@ -270,7 +270,7 @@ while not target_reached and iters < max_iters:
 
     actor_loss = model_actor.fit(
         [states, actions_probs, advantages, rewards, values],
-        [actions_onehot], verbose=True, shuffle=True, epochs=8,
+        [actions_onehot], verbose=True, shuffle=True, epochs=1,
         callbacks=[tensor_board])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards[0]))
     #print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))

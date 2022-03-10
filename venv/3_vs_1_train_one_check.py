@@ -245,9 +245,9 @@ while not target_reached and iters < max_iters:
     # actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, 19))
     actor_loss = model_actor.fit(
         [states, actions_probs, advantages, rewards, values],
-        [actions_onehot], verbose=True, shuffle=True, epochs=8,
+        [actions_onehot], verbose=True, shuffle=True, epochs=1,
         callbacks=[tensor_board])
-    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8,
+    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=1,
                                    verbose=True, callbacks=[tensor_board])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards))
     if not iters % 200: # save actor models in increments of 200
