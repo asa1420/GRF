@@ -6,7 +6,7 @@ import tensorflow as tf
 import os.path
 from tensorflow.keras.models import Model, load_model
 
-env = football_env.create_environment(env_name='3_vs_3', representation='simple115v2', render=True, rewards='scoring,checkpoints', number_of_left_players_agent_controls=2)
+env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=True, rewards='scoring', number_of_left_players_agent_controls=2)
 
 action_dims = env.action_space.nvec # the number of actions now is an array of the number of actions for each player. For two players, it is [19 19]
 
@@ -14,7 +14,7 @@ dummy_n = np.zeros((1, len(action_dims), action_dims[0])) # len(action_dims) = n
 dummy_1 = np.zeros((1, len(action_dims), 1))
 
 #model_actor = load_model('models/Empty Goal Models/model_actor_147_1.0.hdf5', custom_objects={'loss': 'categorical_hinge'})
-model_actor = load_model('models/5vs5_two_players/model_actor_79_0.0.hdf5', custom_objects={'loss': 'categorical_hinge'})
+model_actor = load_model('models/3vs1_two/model_actor_7720_0.0.hdf5', custom_objects={'loss': 'categorical_hinge'})
 state = env.reset()
 done = False
 total_rewards = np.zeros(2)

@@ -24,16 +24,20 @@ lmbda = 0.95
 
 
 def get_advantages(values, masks, rewards):
-    returns = np.zeros((ppo_steps, 2)) # for two players
+    returns = np.zeros((ppo_steps, len(action_dims)))
     gae1 = 0
     gae2 = 0
+    gae3 = 0
     for i in reversed(range(len(rewards))):
         delta1 = rewards[i][0] + gamma * values[i + 1][0] * masks[i] - values[i][0]
         gae1 = delta1 + gamma * lmbda * masks[i] * gae1
         delta2 = rewards[i][1] + gamma * values[i + 1][1] * masks[i] - values[i][1]
         gae2 = delta2 + gamma * lmbda * masks[i] * gae2
+        delta3 = rewards[i][2] + gamma * values[i + 1][2] * masks[i] - values[i][2]
+        gae3 = delta3 + gamma * lmbda * masks[i] * gae3
         returns[i][0] = gae1 + values[i][0]
         returns[i][1] = gae2 + values[i][1]
+        returns[i][2] = gae3 + values[i][2]
 
     adv = returns - values[:-1]
     return returns, (adv - np.mean(adv)) / (np.std(adv) + 1e-10) # advantages is normalised and a residue is added to prevent division by zero
@@ -113,10 +117,10 @@ def get_model_actor_image(input_dims, output_dims):
 
 def get_model_actor_simple(input_dims, output_dims):
     state_input = Input(shape=input_dims)
-    oldpolicy_probs = Input(shape=(2, output_dims[0],)) # changed to make it suitable for two players
-    advantages = Input(shape=(2, 1,))
-    rewards = Input(shape=(2, 1,))
-    values = Input(shape=(2, 1,))
+    oldpolicy_probs = Input(shape=(len(action_dims), output_dims[0],)) # changed to make it suitable for two players
+    advantages = Input(shape=(len(action_dims), 1,))
+    rewards = Input(shape=(len(action_dims), 1,))
+    values = Input(shape=(len(action_dims), 1,))
     #loss_layer = PPO_loss_layer(2)(state_input, oldpolicy_probs, advantages, rewards, values)
     # Classification block
     x = Dense(512, activation='relu', name='fc1')(state_input) # second layer? it is a hidden layer with 512 neurons
@@ -176,7 +180,7 @@ image_based = False
 if image_based:
     env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='pixels', render=False)
 else:
-    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=False, rewards='scoring', number_of_left_players_agent_controls=2)
+    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=False, rewards='scoring,checkpoints', number_of_left_players_agent_controls=3)
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -207,6 +211,7 @@ while not target_reached and iters < max_iters:
     states = []
     actions_player1 = []
     actions_player2 = []
+    actions_player3 = []
     values = []
     masks = []
     rewards = []
@@ -222,18 +227,22 @@ while not target_reached and iters < max_iters:
         q_values = q_values_tensor.numpy()[0, :, 0]
         action_player1 = np.random.choice(action_dims[0], p=action_dist[0, 0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
         action_player2 = np.random.choice(action_dims[0], p=action_dist[0, 1, :])
+        action_player3 = np.random.choice(action_dims[0], p=action_dist[0, 2, :])
         action_onehot = np.zeros((len(action_dims), action_dims[0]))
         action_onehot[0][action_player1] = 1
         action_onehot[1][action_player2] = 1
-        observation, reward, done, info = env.step([action_player1, action_player2])
+        action_onehot[2][action_player3] = 1
+        observation, reward, done, info = env.step([action_player1, action_player2, action_player3])
         iter_rewards[0] = iter_rewards[0] + reward[0]
         iter_rewards[1] = iter_rewards[1] + reward[1]
+        iter_rewards[2] = iter_rewards[2] + reward[2]
         #print('itr: ' + str(itr) + ', action_player1=' + str(action_player1) + ', action_player2=' + str(action_player2) + ', reward=' + str(reward) + ', q val=' + str(q_values) + ', total rewards=' + str(iter_rewards))
         mask = not done
 
         states.append(state)
         actions_player1.append(action_player1)
         actions_player2.append(action_player2)
+        actions_player3.append(action_player3)
         actions_onehot.append(action_onehot)
         values.append(q_values)
         masks.append(mask)
@@ -266,8 +275,8 @@ while not target_reached and iters < max_iters:
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards[0]))
     #print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
     if not iters % 200:  # save actor models in increments of 200
-        model_actor.save('models/3vs1_two_5M/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
-    env.reset() # reset game after every iteration to reduce training wasted time.
+        model_actor.save('models/3vs1_three_check_5M/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+    env.reset()  # reset game after every iteration to reduce training wasted time.
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
 env.close()

@@ -169,7 +169,7 @@ image_based = False
 if image_based:
     env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='pixels', render=True)
 else:
-    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=False, rewards='scoring', number_of_left_players_agent_controls=1)
+    env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=False, rewards='scoring,checkpoints', number_of_left_players_agent_controls=1)
 
 state = env.reset()
 state_dims = env.observation_space.shape
@@ -189,11 +189,11 @@ else:
     # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
     # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 128
+ppo_steps = 256
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 7813
+max_iters = 19531
 
 while not target_reached and iters < max_iters:
     iter_rewards = 0
@@ -250,9 +250,9 @@ while not target_reached and iters < max_iters:
     critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8,
                                    verbose=True, callbacks=[tensor_board])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards))
-    if not iters % 20: # save actor models in increments of 20
-        model_actor.save('models/3vs1_one/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
-        env.reset()  # does not reset game after every iteration now
+    if not iters % 200: # save actor models in increments of 200
+        model_actor.save('models/3vs1_one_check_5M/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+    env.reset()  # reset game after every iteration to reduce training wasted time.
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
 env.close()

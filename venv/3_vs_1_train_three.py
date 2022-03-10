@@ -27,6 +27,7 @@ def get_advantages(values, masks, rewards):
     returns = np.zeros((ppo_steps, len(action_dims)))
     gae1 = 0
     gae2 = 0
+    gae3 = 0
     for i in reversed(range(len(rewards))):
         delta1 = rewards[i][0] + gamma * values[i + 1][0] * masks[i] - values[i][0]
         gae1 = delta1 + gamma * lmbda * masks[i] * gae1
@@ -199,11 +200,11 @@ else:
     # model_actor = load_model('third_model_actor.hdf5', custom_objects={'loss': 'categorical_hinge'})
     # model_critic = load_model('third_model_critic.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
-ppo_steps = 128
+ppo_steps = 256
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 7813
+max_iters = 19531
 
 while not target_reached and iters < max_iters:
     iter_rewards = np.zeros(len(action_dims))
@@ -273,9 +274,9 @@ while not target_reached and iters < max_iters:
         callbacks=[tensor_board])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards[0]))
     #print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
-    if not iters % 20:  # save actor models in increments of 5
-        model_actor.save('models/3vs1_three/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
-        env.reset() # does not reset game after every iteration now
+    if not iters % 200:  # save actor models in increments of 200
+        model_actor.save('models/3vs1_three_5M/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+    env.reset()  # reset game after every iteration to reduce training wasted time.
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
 env.close()
