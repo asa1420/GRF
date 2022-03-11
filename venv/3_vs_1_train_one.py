@@ -252,6 +252,7 @@ while not target_reached and iters < max_iters:
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards))
     if not iters % 200: # save actor models in increments of 200
         model_actor.save('models/3vs1_one_5M/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_critic.save('models/3vs1_one_5M/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
     env.reset()  # reset game after every iteration to reduce training wasted time.
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends

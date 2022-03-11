@@ -7,13 +7,13 @@ import os.path
 from tensorflow.keras.models import Model, load_model
 import time
 
-env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=True, rewards='scoring', number_of_left_players_agent_controls=1)
+env = football_env.create_environment(env_name='academy_3_vs_1_with_keeper', representation='simple115v2', render=True, rewards='scoring,checkpoints', number_of_left_players_agent_controls=1)
 
 n_actions = env.action_space.n
 dummy_n = np.zeros((1, 1, n_actions))
 dummy_1 = np.zeros((1, 1, 1))
 
-model_actor = load_model('models/Empty_Goal_noCheckpoint/model_actor_400_0.0.hdf5', custom_objects={'loss': 'categorical_hinge'})
+model_actor = load_model('models/3vs1_one_check_5M/model_actor_2200_5.300000302493572.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
 state = env.reset()
 done = False
