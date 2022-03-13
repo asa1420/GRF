@@ -13,7 +13,7 @@ n_actions = env.action_space.n
 dummy_n = np.zeros((1, 1, n_actions))
 dummy_1 = np.zeros((1, 1, 1))
 
-model_actor = load_model('models/3vs1_one_check_5M/model_actor_2200_5.300000302493572.hdf5', custom_objects={'loss': 'categorical_hinge'})
+model_actor = load_model('models/3vs1_one_check_5M/model_actor_2000_2.1000001430511475.hdf5', custom_objects={'loss': 'categorical_hinge'})
 
 state = env.reset()
 done = False
