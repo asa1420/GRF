@@ -204,7 +204,7 @@ ppo_steps = 256
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 19531
+max_iters = 800
 
 while not target_reached and iters < max_iters:
     iter_rewards = np.zeros(len(action_dims))
@@ -265,18 +265,18 @@ while not target_reached and iters < max_iters:
     returns = np.reshape(returns, newshape=(ppo_steps, len(action_dims), 1))
     actions_onehot = np.reshape(actions_onehot, newshape=(ppo_steps, len(action_dims), action_dims[0]))
 
-    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=1,
+    critic_loss = model_critic.fit([states], [returns], shuffle=True, epochs=8,
                                    verbose=True, callbacks=[tensor_board])
 
     actor_loss = model_actor.fit(
         [states, actions_probs, advantages, rewards, values],
-        [actions_onehot], verbose=True, shuffle=True, epochs=1,
+        [actions_onehot], verbose=True, shuffle=True, epochs=8,
         callbacks=[tensor_board])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards[0]))
     #print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
     if not iters % 200:  # save actor models in increments of 200
-        model_actor.save('models/3vs1_three_check_5M/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
-        model_critic.save('models/3vs1_three_check_5M/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+        model_actor.save('models/3vs1_three_check_test/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+        model_critic.save('models/3vs1_three_check_test/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
     env.reset()  # reset game after every iteration to reduce training wasted time.
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
