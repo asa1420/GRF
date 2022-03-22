@@ -204,7 +204,7 @@ ppo_steps = 256
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 19531
+max_iters = 801
 
 while not target_reached and iters < max_iters:
     iter_rewards = np.zeros(len(action_dims))
@@ -225,6 +225,16 @@ while not target_reached and iters < max_iters:
         #q_values = model_critic([state_input])[0, :, 0]
         q_values_tensor = model_critic([state_input])
         q_values = q_values_tensor.numpy()[0, :, 0]
+        # edit action_dist by setting maximum probabilities:
+        if max(action_dist) > 0.5:
+            diff = max(action_dist) - 0.5
+            share = diff / (len(action_dist) - 1) # distribute the difference to other actions
+            index = np.argmax(action_dist)  # index of max
+            for i in range(len(action_dist)):
+                if i == index:
+                    action_dist[i] = 0.5
+                else:
+                    action_dist[i] = action_dist[i] + share
         action_player1 = np.random.choice(action_dims[0], p=action_dist[0, 0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
         action_player2 = np.random.choice(action_dims[0], p=action_dist[0, 1, :])
         action_player3 = np.random.choice(action_dims[0], p=action_dist[0, 2, :])
@@ -275,8 +285,8 @@ while not target_reached and iters < max_iters:
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards[0]))
     #print('total rewards player 1=' + str(iter_rewards[0]) + 'total rewards player 2=' + str(iter_rewards[1]))
     if not iters % 200:  # save actor models in increments of 200
-        model_actor.save('models/3vs1_three_5M/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
-        model_critic.save('models/3vs1_three_5M/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+        model_actor.save('models/3vs1_three_max/model_actor_{}_{}.hdf5'.format(iters, iter_rewards[0]))
+        model_critic.save('models/3vs1_three_max/model_critic_{}_{}.hdf5'.format(iters, iter_rewards[0]))
     env.reset()  # reset game after every iteration to reduce training wasted time.
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
