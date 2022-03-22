@@ -14,7 +14,7 @@ dummy_n = np.zeros((1, len(action_dims), action_dims[0])) # len(action_dims) = n
 dummy_1 = np.zeros((1, len(action_dims), 1))
 
 #model_actor = load_model('models/Empty Goal Models/model_actor_147_1.0.hdf5', custom_objects={'loss': 'categorical_hinge'})
-model_actor = load_model('models/3vs1_two_check_5M/model_actor_11.hdf5', custom_objects={'loss': 'categorical_hinge'})
+model_actor = load_model('models/3vs1_two_check_5M/model_actor_800_12.100000739097595.hdf5', custom_objects={'loss': 'categorical_hinge'})
 state = env.reset()
 done = False
 total_rewards = np.zeros(2)
@@ -30,6 +30,8 @@ while True:
     total_rewards[1] += reward[1]
     print('action_player1=' + str(action_player1) + ', action_player2=' + str(
         action_player2) + ', reward=' + str(reward) + ', total rewards=' + str(total_rewards))
+    print(', probs1 =' + str(action_dist[0, 0, :]))
+    print(', probs2 =' + str(action_dist[0, 1, :]))
     state = next_state
     if done:
         state = env.reset()

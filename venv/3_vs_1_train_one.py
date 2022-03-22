@@ -17,7 +17,7 @@ critic_discount = 0.5
 entropy_beta = 0.001
 gamma = 0.99
 lmbda = 0.95
-
+epsilon = 0.2
 
 def get_advantages(values, masks, rewards):
     returns = []
@@ -193,7 +193,7 @@ ppo_steps = 256
 target_reached = False
 best_reward = 0
 iters = 0
-max_iters = 19531
+max_iters = 19601
 
 while not target_reached and iters < max_iters:
     iter_rewards = 0
@@ -211,7 +211,20 @@ while not target_reached and iters < max_iters:
         action_dist_tensor = model_actor([state_input, dummy_n, dummy_1, dummy_1, dummy_1])
         action_dist = action_dist_tensor.numpy()
         q_value = model_critic([state_input]).numpy()[0, 0]
-        action = np.random.choice(n_actions, p=action_dist[0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
+        # edit action_dist by setting maximum probabilities:
+        if max(action_dist[0, :]) > 0.5: # for player 1
+            diff = max(action_dist[0, :]) - 0.5
+            share = diff / (len(action_dist[0, :]) - 1) # distribute the difference to other actions
+            index = np.argmax(action_dist[0, :])  # index of max
+            for i in range(len(action_dist[0, :])):
+                if i == index:
+                    action_dist[0, i] = 0.5
+                else:
+                    action_dist[0, i] = action_dist[0, i] + share
+        if np.random.uniform() < epsilon: # epsilon greedy approach
+            action = np.random.choice(n_actions) # take a completely random action
+        else:
+            action = np.random.choice(n_actions, p=action_dist[0, :])
         action_onehot = np.zeros(n_actions)
         action_onehot[action] = 1
 
@@ -251,8 +264,8 @@ while not target_reached and iters < max_iters:
                                    verbose=True, callbacks=[tensor_board])
     print('total test reward of iteration {} = {}'.format(iters, iter_rewards))
     if not iters % 200: # save actor models in increments of 200
-        model_actor.save('models/3vs1_one_5M/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
-        model_critic.save('models/3vs1_one_5M/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_actor.save('models/3vs1_one_5M_explore/model_actor_{}_{}.hdf5'.format(iters, iter_rewards))
+        model_critic.save('models/3vs1_one_5M_explore/model_critic_{}_{}.hdf5'.format(iters, iter_rewards))
     env.reset()  # reset game after every iteration to reduce training wasted time.
     iters += 1
 print("time taken to finish whole training: " + str(time.time() - start)) # prints at what time the code ends
