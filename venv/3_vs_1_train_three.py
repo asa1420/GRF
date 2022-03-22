@@ -226,15 +226,33 @@ while not target_reached and iters < max_iters:
         q_values_tensor = model_critic([state_input])
         q_values = q_values_tensor.numpy()[0, :, 0]
         # edit action_dist by setting maximum probabilities:
-        if max(action_dist) > 0.5:
-            diff = max(action_dist) - 0.5
-            share = diff / (len(action_dist) - 1) # distribute the difference to other actions
-            index = np.argmax(action_dist)  # index of max
-            for i in range(len(action_dist)):
+        if max(action_dist[0, 0, :]) > 0.5: # for player 1
+            diff = max(action_dist[0, 0, :]) - 0.5
+            share = diff / (len(action_dist[0, 0, :]) - 1) # distribute the difference to other actions
+            index = np.argmax(action_dist[0, 0, :])  # index of max
+            for i in range(len(action_dist[0, 0, :])):
                 if i == index:
-                    action_dist[i] = 0.5
+                    action_dist[0, 0, i] = 0.5
                 else:
-                    action_dist[i] = action_dist[i] + share
+                    action_dist[0, 0, i] = action_dist[0, 0, i] + share
+        if max(action_dist[0, 1, :]) > 0.5: # for player 2
+            diff = max(action_dist[0, 1, :]) - 0.5
+            share = diff / (len(action_dist[0, 1, :]) - 1) # distribute the difference to other actions
+            index = np.argmax(action_dist[0, 1, :])  # index of max
+            for i in range(len(action_dist[0, 1, :])):
+                if i == index:
+                    action_dist[0, 1, i] = 0.5
+                else:
+                    action_dist[0, 1, i] = action_dist[0, 1, i] + share
+        if max(action_dist[0, 2, :]) > 0.5: # for player 3
+            diff = max(action_dist[0, 2, :]) - 0.5
+            share = diff / (len(action_dist[0, 2, :]) - 1) # distribute the difference to other actions
+            index = np.argmax(action_dist[0, 2, :])  # index of max
+            for i in range(len(action_dist[0, 2, :])):
+                if i == index:
+                    action_dist[0, 2, i] = 0.5
+                else:
+                    action_dist[0, 2, i] = action_dist[0, 2, i] + share
         action_player1 = np.random.choice(action_dims[0], p=action_dist[0, 0, :]) # same thing as action_dist, it just removes the extra dimension from model_actor.predict()
         action_player2 = np.random.choice(action_dims[0], p=action_dist[0, 1, :])
         action_player3 = np.random.choice(action_dims[0], p=action_dist[0, 2, :])
