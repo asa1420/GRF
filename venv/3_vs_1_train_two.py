@@ -21,7 +21,7 @@ critic_discount = 0.5
 entropy_beta = 0.001
 gamma = 0.99
 lmbda = 0.95
-
+epsilon = 0.7
 
 def get_advantages(values, masks, rewards):
     returns = np.zeros((ppo_steps, 2)) # for two players
