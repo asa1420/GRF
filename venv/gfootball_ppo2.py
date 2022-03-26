@@ -59,7 +59,6 @@ def create_single_football_env(iprocess):
   env = football_env.create_environment(
       env_name=FLAGS.level, stacked=('stacked' in FLAGS.state),
       rewards=FLAGS.reward_experiment,
-      number_of_left_players_agent_controls=2,
       logdir=logger.get_dir(),
       write_goal_dumps=FLAGS.dump_scores and (iprocess == 0),
       write_full_episode_dumps=FLAGS.dump_full_episodes and (iprocess == 0),
