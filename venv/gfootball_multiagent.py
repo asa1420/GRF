@@ -31,7 +31,7 @@ class RllibGFootball(MultiAgentEnv):
     self.env = football_env.create_environment(
         env_name='test_example_multiagent', stacked=False,
         logdir=os.path.join(tempfile.gettempdir(), 'rllib_test'),
-        write_goal_dumps=False, write_full_episode_dumps=False, render=True,
+        write_goal_dumps=False, write_full_episode_dumps=False, render=False,
         dump_frequency=0,
         number_of_left_players_agent_controls=num_agents,
         channel_dimensions=(42, 42))
