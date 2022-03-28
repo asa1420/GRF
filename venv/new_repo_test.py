@@ -43,7 +43,7 @@ class RllibGFootball(MultiAgentEnv):
     self.env = football_env.create_environment(
         env_name='academy_3_vs_1_with_keeper', stacked=True,
         logdir='gfootball/rllib',
-        enable_goal_videos=False, enable_full_episode_videos=False, render=False,
+        render=False,
         dump_frequency=0,
         number_of_left_players_agent_controls=num_agents,
         channel_dimensions=(42, 42))
