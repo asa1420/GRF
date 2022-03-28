@@ -115,10 +115,10 @@ if __name__ == '__main__':
           'lr': 2.5e-4,
           'log_level': 'DEBUG',
           'simple_optimizer': args.simple,
-          #'multiagent': {
-              #'policies': policies,
-              #'policy_mapping_fn': tune.function(
-                  #lambda agent_id: policy_ids[int(agent_id[6:])]),
-          #},
+          'multiagent': {
+              'policies': policies,
+              'policy_mapping_fn': tune.function(
+                  lambda agent_ids: policy_ids[int(agent_ids[6:])]),
+          },
       },
   )
