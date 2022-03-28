@@ -103,7 +103,7 @@ if __name__ == '__main__':
           'vf_clip_param': 10.0,
           'entropy_coeff': 0.01,
           'train_batch_size': 2000,
-          'sample_batch_size': 100,
+          #'sample_batch_size': 100,
           'sgd_minibatch_size': 500,
           'num_sgd_iter': 10,
           'num_workers': 10,
@@ -115,10 +115,10 @@ if __name__ == '__main__':
           'lr': 2.5e-4,
           'log_level': 'DEBUG',
           'simple_optimizer': args.simple,
-          'multiagent': {
-              'policies': policies,
-              'policy_mapping_fn': tune.function(
-                  lambda agent_id: policy_ids[int(agent_id[6:])]),
+          #'multiagent': {
+              #'policies': policies,
+              #'policy_mapping_fn': tune.function(
+                  #lambda agent_id: policy_ids[int(agent_id[6:])]),
           },
       },
   )
