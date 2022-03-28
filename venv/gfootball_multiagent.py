@@ -119,6 +119,6 @@ if __name__ == '__main__':
               #'policies': policies,
               #'policy_mapping_fn': tune.function(
                   #lambda agent_id: policy_ids[int(agent_id[6:])]),
-          },
+          #},
       },
   )
