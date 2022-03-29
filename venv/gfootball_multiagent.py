@@ -106,7 +106,7 @@ if __name__ == '__main__':
           'sample_batch_size': 100,
           'sgd_minibatch_size': 500,
           'num_sgd_iter': 10,
-          'num_workers': 10,
+          'num_workers': 1,
           'num_envs_per_worker': 1,
           'batch_mode': 'truncate_episodes',
           'observation_filter': 'NoFilter',
