@@ -1,13 +1,14 @@
 """A simple example of setting up a multi-agent version of GFootball with rllib.
 """
 # copied from gfootball/examples/run_multiagent_rllib
+# used to test a multi-agent trained model by adding --restore parameter to tune.run()
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import os
 import tempfile
-
+import pandas as pd
 import argparse
 import gfootball.env as football_env
 import gym
@@ -15,6 +16,7 @@ import ray
 from ray import tune
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
 from ray.tune.registry import register_env
+
 
 parser = argparse.ArgumentParser()
 
@@ -56,7 +58,6 @@ class RllibGFootball(MultiAgentEnv):
     actions = []
     for key, value in sorted(action_dict.items()):
       actions.append(value)
-    print('hi')
     o, r, d, i = self.env.step(actions)
     rewards = {}
     obs = {}
@@ -75,7 +76,7 @@ class RllibGFootball(MultiAgentEnv):
 
 if __name__ == '__main__':
   args = parser.parse_args()
-  ray.init(num_gpus=1)
+  ray.init()
 
   # Simple environment with `num_agents` independent players
   register_env('gfootball', lambda _: RllibGFootball(args.num_agents))
@@ -83,43 +84,48 @@ if __name__ == '__main__':
   obs_space = single_env.observation_space
   act_space = single_env.action_space
 
+
   def gen_policy(_):
     return (None, obs_space, act_space, {})
 
-  # Setup PPO with an ensemble of `num_policies` different policies
+    # Setup PPO with an ensemble of `num_policies` different policies
+
+
   policies = {
-      'policy_{}'.format(i): gen_policy(i) for i in range(args.num_policies)
+    'policy_{}'.format(i): gen_policy(i) for i in range(args.num_policies)
   }
   policy_ids = list(policies.keys())
 
   tune.run(
-      'PPO',
-      stop={'training_iteration': args.num_iters},
-      checkpoint_freq=50,
-      config={
-          'env': 'gfootball',
-          'lambda': 0.95,
-          'kl_coeff': 0.2,
-          'clip_rewards': False,
-          'vf_clip_param': 10.0,
-          'entropy_coeff': 0.01,
-          'train_batch_size': 2000,
-          'sample_batch_size': 100,
-          'sgd_minibatch_size': 500,
-          'num_sgd_iter': 10,
-          'num_workers': 10,
-          'num_envs_per_worker': 1,
-          'batch_mode': 'truncate_episodes',
-          'observation_filter': 'NoFilter',
-          'vf_share_layers': 'true',
-          'num_gpus': 1,
-          'lr': 2.5e-4,
-          'log_level': 'DEBUG',
-          'simple_optimizer': args.simple,
-          'multiagent': {
-              'policies': policies,
-              'policy_mapping_fn': tune.function(
-                  lambda agent_id: policy_ids[int(agent_id[6:])]),
-          },
+    'PPO',
+    stop={'training_iteration': args.num_iters},
+    checkpoint_freq=50,
+    restore='models/PPO_gfootball_0_2022-03-29_14-45-46hcqi4q54/checkpoint_50/checkpoint-50',
+    config={
+      'env': 'gfootball',
+      'lambda': 0.95,
+      'kl_coeff': 0.2,
+      'clip_rewards': False,
+      'vf_clip_param': 10.0,
+      'entropy_coeff': 0.01,
+      'train_batch_size': 2000,
+      'sample_batch_size': 100,
+      'sgd_minibatch_size': 500,
+      'num_sgd_iter': 1,
+      'num_workers': 1,
+      'num_envs_per_worker': 1,
+      'batch_mode': 'truncate_episodes',
+      'observation_filter': 'NoFilter',
+      'vf_share_layers': 'true',
+      #'num_gpus': 1,
+      'lr': 2.5e-4,
+      'log_level': 'DEBUG',
+      'simple_optimizer': args.simple,
+      'multiagent': {
+        'policies': policies,
+        'policy_mapping_fn': tune.function(
+          lambda agent_ids: policy_ids[int(agent_ids[6:])]),
       },
+    },
   )
+
