@@ -74,7 +74,7 @@ class RllibGFootball(MultiAgentEnv):
 
 if __name__ == '__main__':
   args = parser.parse_args()
-  ray.init(num_gpus=1)
+  ray.init()
 
   # Simple environment with `num_agents` independent players
   register_env('gfootball', lambda _: RllibGFootball(args.num_agents))
@@ -111,7 +111,7 @@ if __name__ == '__main__':
           'batch_mode': 'truncate_episodes',
           'observation_filter': 'NoFilter',
           'vf_share_layers': 'true',
-          'num_gpus': 1,
+          #'num_gpus': 1,
           'lr': 2.5e-4,
           'log_level': 'DEBUG',
           'simple_optimizer': args.simple,
