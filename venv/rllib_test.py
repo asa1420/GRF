@@ -1,10 +1,12 @@
 """A simple example of setting up a multi-agent version of GFootball with rllib.
 """
-
+# copied from gfootball/examples/run_multiagent_rllib
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+import tempfile
 
 import argparse
 import gfootball.env as football_env
@@ -18,7 +20,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--num-agents', type=int, default=3)
 parser.add_argument('--num-policies', type=int, default=3)
-parser.add_argument('--num-iters', type=int, default=5e6)
+parser.add_argument('--num-iters', type=int, default=1)
 parser.add_argument('--simple', action='store_true')
 
 
@@ -27,9 +29,9 @@ class RllibGFootball(MultiAgentEnv):
 
   def __init__(self, num_agents):
     self.env = football_env.create_environment(
-        env_name='academy_3_vs_1_with_keeper', stacked=True,
-        logdir='gfootball/rllib',
-        render=False,
+        env_name='test_example_multiagent', stacked=False,
+        logdir=os.path.join(tempfile.gettempdir(), 'rllib_test'),
+        write_goal_dumps=False, write_full_episode_dumps=False, render=True,
         dump_frequency=0,
         number_of_left_players_agent_controls=num_agents,
         channel_dimensions=(42, 42))
@@ -54,6 +56,7 @@ class RllibGFootball(MultiAgentEnv):
     actions = []
     for key, value in sorted(action_dict.items()):
       actions.append(value)
+    print('hi')
     o, r, d, i = self.env.step(actions)
     rewards = {}
     obs = {}
@@ -91,26 +94,26 @@ if __name__ == '__main__':
 
   tune.run(
       'PPO',
-      stop={'timesteps_total': args.num_iters},
+      stop={'training_iteration': args.num_iters},
       checkpoint_freq=50,
       config={
           'env': 'gfootball',
           'lambda': 0.95,
-          'kl_coeff': 0.27,
+          'kl_coeff': 0.2,
           'clip_rewards': False,
           'vf_clip_param': 10.0,
           'entropy_coeff': 0.01,
-          'train_batch_size': 128*7,
+          'train_batch_size': 2000,
           'sample_batch_size': 100,
           'sgd_minibatch_size': 500,
           'num_sgd_iter': 10,
-          'num_workers': 3,
+          'num_workers': 10,
           'num_envs_per_worker': 1,
           'batch_mode': 'truncate_episodes',
           'observation_filter': 'NoFilter',
           'vf_share_layers': 'true',
           'num_gpus': 1,
-          'lr': 0.00008,
+          'lr': 2.5e-4,
           'log_level': 'DEBUG',
           'simple_optimizer': args.simple,
           'multiagent': {
