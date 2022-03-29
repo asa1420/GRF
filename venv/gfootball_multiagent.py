@@ -94,7 +94,7 @@ if __name__ == '__main__':
   tune.run(
       'PPO',
       stop={'training_iteration': args.num_iters},
-      checkpoint_freq=1,
+      checkpoint_freq=50,
       config={
           'env': 'gfootball',
           'lambda': 0.95,
