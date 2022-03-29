@@ -29,7 +29,7 @@ class RllibGFootball(MultiAgentEnv):
 
   def __init__(self, num_agents):
     self.env = football_env.create_environment(
-        env_name='test_example_multiagent', stacked=False,
+        env_name='academy_3_vs_1_with_keeper', stacked=True,
         logdir=os.path.join(tempfile.gettempdir(), 'rllib_test'),
         write_goal_dumps=False, write_full_episode_dumps=False, render=False,
         dump_frequency=0,
@@ -103,7 +103,7 @@ if __name__ == '__main__':
           'vf_clip_param': 10.0,
           'entropy_coeff': 0.01,
           'train_batch_size': 2000,
-          #'sample_batch_size': 100,
+          'sample_batch_size': 100,
           'sgd_minibatch_size': 500,
           'num_sgd_iter': 10,
           'num_workers': 10,
