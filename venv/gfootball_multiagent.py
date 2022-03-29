@@ -7,7 +7,7 @@ from __future__ import print_function
 
 import os
 import tempfile
-
+import json
 import argparse
 import gfootball.env as football_env
 import gym
