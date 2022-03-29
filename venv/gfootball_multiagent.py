@@ -74,7 +74,13 @@ class RllibGFootball(MultiAgentEnv):
 
 if __name__ == '__main__':
   args = parser.parse_args()
-  ray.init(temp_dir='/etc/ray/')
+  ray.init((
+    _system_config={
+        "object_spilling_config": json.dumps(
+            {"type": "filesystem", "params": {"directory_path": "/etc"}},
+        )
+    },
+))
 
   # Simple environment with `num_agents` independent players
   register_env('gfootball', lambda _: RllibGFootball(args.num_agents))
