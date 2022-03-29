@@ -74,7 +74,7 @@ class RllibGFootball(MultiAgentEnv):
 
 if __name__ == '__main__':
   args = parser.parse_args()
-  ray.init(plasma_store_socket_name='/etc/sockets/',temp_dir='/etc/ray/')
+  ray.init(memory=10000000000, object_store_memory=5000000000)
 
   # Simple environment with `num_agents` independent players
   register_env('gfootball', lambda _: RllibGFootball(args.num_agents))
