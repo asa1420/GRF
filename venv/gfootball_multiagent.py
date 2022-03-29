@@ -74,7 +74,7 @@ class RllibGFootball(MultiAgentEnv):
 
 if __name__ == '__main__':
   args = parser.parse_args()
-  ray.init(num_cpus=1)
+  ray.init()
 
   # Simple environment with `num_agents` independent players
   register_env('gfootball', lambda _: RllibGFootball(args.num_agents))
