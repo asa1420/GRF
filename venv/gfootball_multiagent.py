@@ -111,7 +111,7 @@ if __name__ == '__main__':
           'batch_mode': 'truncate_episodes',
           'observation_filter': 'NoFilter',
           'vf_share_layers': 'true',
-          'num_cpus': 1,
+          'num_gpus': 1,
           'lr': 2.5e-4,
           'log_level': 'DEBUG',
           'simple_optimizer': args.simple,
