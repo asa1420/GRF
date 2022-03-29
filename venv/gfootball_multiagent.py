@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--num-agents', type=int, default=3)
 parser.add_argument('--num-policies', type=int, default=3)
-parser.add_argument('--num-iters', type=int, default=5000000)
+parser.add_argument('--num-iters', type=int, default=2500)
 parser.add_argument('--simple', action='store_true')
 
 
@@ -31,7 +31,8 @@ class RllibGFootball(MultiAgentEnv):
     self.env = football_env.create_environment(
         env_name='academy_3_vs_1_with_keeper', stacked=False,
         logdir=os.path.join(tempfile.gettempdir(), 'rllib_test'),
-        write_goal_dumps=True, write_full_episode_dumps=True, render=False,
+        write_goal_dumps=False, write_full_episode_dumps=False, render=False,
+        dump_frequency=0,
         number_of_left_players_agent_controls=num_agents,
         channel_dimensions=(42, 42))
     self.action_space = gym.spaces.Discrete(self.env.action_space.nvec[1])
