@@ -64,7 +64,9 @@ def main(args):
     dones = np.zeros((1,))
 
     episode_rew = np.zeros(env.num_envs) if isinstance(env, VecEnv) else np.zeros(1)
-    while True:
+    rewards = np.zeros(50)
+    episode_counter = 0
+    while episode_counter < 50:
         if state is not None:
             actions, _, state, _ = model.step(obs,S=state, M=dones)
         else:
@@ -75,10 +77,14 @@ def main(args):
         env.render()
         done_any = done.any() if isinstance(done, np.ndarray) else done
         if done_any:
+            rewards[episode_counter] = episode_rew
+            episode_counter +=1
             for i in np.nonzero(done)[0]:
                 print('episode_rew={}'.format(episode_rew[i]))
                 episode_rew[i] = 0
-
+             
+    average_score = numpy.mean(rewards)
+    variance_in_goals = numpy.var(rewards)
     env.close()
 if __name__ == '__main__':
     main(sys.argv)
