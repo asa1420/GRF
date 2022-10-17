@@ -14,4 +14,6 @@ action which is running straight into the goal. As for the main multi-agent resu
 through a defender by passing to each other, after training for 5M steps.
 
 This repository will be of great use to anyone interested is starting off with Reinforcement Learning research using Google Research Football, as I include every obstacle I went throught in my lab book, which is something I find really valuable for any beginner in this field of research.
+
+
 Feel free to use any piece of code I produced, or experimental setups created! Kindly reference my repository or final report once doing so.
