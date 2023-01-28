@@ -1,4 +1,4 @@
-# GRF
+# Google Research Football
 This is my Final Year Project as a Bachelor of Engineering (Electronic & Electrical Engineering) Student at University College London.
 
 In this project, a game environment called Google Research Football was chosen to research the possibility of
